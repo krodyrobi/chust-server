@@ -3,13 +3,14 @@ use std::path::Path;
 use std::error::Error;
 use std::io::Read;
 use std::io::Write;
+use std::collections::HashMap;
 
 use rustc_serialize::json::{self, Json};
 
 use super::user::User;
 
 pub struct DataBase<'a> {
-    users: Vec<User>,
+    users: HashMap<String, User>,
     path: &'a Path
 }
 
@@ -20,7 +21,7 @@ impl<'a> DataBase<'a> {
 
         try!(file.read_to_string(&mut string));
 
-        let users: Vec<User> = try!(json::decode(&string));
+        let users: HashMap<String, User> = try!(json::decode(&string));
 
         Ok(DataBase {
             users: users,
@@ -30,9 +31,22 @@ impl<'a> DataBase<'a> {
 
     pub fn empty(path: &Path) -> DataBase {
         DataBase {
-            users: vec![],
+            users: HashMap::new(),
             path: path
         }
+    }
+
+    pub fn add(&mut self, user: User) -> bool {
+        if self.users.contains_key(&user.username) {
+            false
+        } else {
+            self.users.insert(user.username.clone(), user);
+            true
+        }
+    }
+
+    pub fn get(&self, username: &str) -> Option<&User> {
+        self.users.get(username)
     }
 
     pub fn write(&self) -> Result<(), Box<Error>> {
@@ -51,6 +65,7 @@ mod test {
     use std::path::Path;
     use std::io::Read;
     use std::io::Write;
+    use std::collections::HashMap;
 
     use rustc_serialize::json::{self, Json};
 
@@ -60,15 +75,16 @@ mod test {
     #[test]
     fn empty() {
         let user1 = User::new("test1", "password1");
-        let user2 = User::new("test2", "password2");
 
-        let string = json::encode(&vec![user1.clone(), user2.clone()]).unwrap();
+        let mut hash_map = HashMap::new();
+        hash_map.insert("test1".to_string(), user1.clone());
+
+        let string = json::encode(&hash_map).unwrap();
 
         let path = Path::new("/tmp/users_list.json");
         let mut data_base = DataBase::empty(path);
 
-        data_base.users.push(user1);
-        data_base.users.push(user2);
+        data_base.add(user1);
 
         data_base.write();
 
@@ -82,15 +98,29 @@ mod test {
     fn new() {
         let user1 = User::new("test1", "password1");
         let user2 = User::new("test2", "password2");
-        let users = vec![user1, user2];
 
-        let string = json::encode(&users).unwrap();
+        let mut hash_map = HashMap::new();
+        hash_map.insert("test1".to_string(), user1.clone());
+        hash_map.insert("test2".to_string(), user2.clone());
+
+        let string = json::encode(&hash_map).unwrap();
+
         let path = Path::new("/tmp/users_list.json");
-
         File::create(path).unwrap().write_all(string.as_bytes());
 
         let data_base = DataBase::new(path).unwrap();
+        assert_eq!(data_base.users.get("test1").unwrap(), hash_map.get("test1").unwrap());
+        assert_eq!(data_base.users.get("test2").unwrap(), hash_map.get("test2").unwrap());
+    }
 
-        assert_eq!(data_base.users, users);
+    #[test]
+    fn add() {
+        let user1 = User::new("test1", "password1");
+        let user2 = User::new("test1", "password1");
+
+        let mut data_base = DataBase::empty(Path::new("/tmp/users_list.json"));
+
+        assert!(data_base.add(user1));
+        assert!(!data_base.add(user2));
     }
 }

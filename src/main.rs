@@ -8,14 +8,17 @@ mod user;
 mod connection;
 
 use std::sync::{Arc, Mutex};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 use std::path::Path;
 use std::env;
+use std::str::from_utf8;
 use getopts::Options;
 
-use connection::{Request, Response};
+use rustc_serialize::json::{self, Json};
+
+use connection::{ClientRequest, ServerRequest, Response};
 use user::User;
 use data_base::DataBase;
 
@@ -41,11 +44,51 @@ fn main() {
     let listener = TcpListener::bind(host).unwrap();
 
     println!("listening");
-    
+
     for stream in listener.incoming() {
-        thread::spawn(|| {
+        let mut data_base = data_base.clone();
+
+        thread::spawn(move || {
             let mut stream = stream.unwrap();
-            stream.write(b"Hello World\r\n").unwrap();
+
+            loop {
+                let mut buf = [0u8; 4096];
+                let size = stream.read(&mut buf).unwrap();
+                let string = from_utf8(&buf[..size]).unwrap();
+
+                let response = match json::decode(&string) {
+                    Ok(request) => {
+                        match request {
+                            ClientRequest::Auth(username, password, port) => {
+                                let data_base = data_base.lock().unwrap();
+
+                                match data_base.get(&username) {
+                                    Some(user) => {
+                                        if user.auth(&password) {
+                                            //TODO port + store
+                                            Response::Ok
+                                        } else {
+                                            Response::Err(2, "Incorrect username or password.".to_string())
+                                        }
+                                    }
+                                    None => Response::Err(2, "Incorrect username or password.".to_string())
+                                }
+                            }
+                            ClientRequest::Reg(username, password) => {
+                                Response::Ok
+                            }
+                            ClientRequest::Send(message) => {
+                                Response::Ok
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        Response::Err(1, "Can't parse request.".to_string())
+                    }
+                };
+
+                stream.write(json::encode(&response).unwrap().as_bytes());
+            }
         });
     }
 }

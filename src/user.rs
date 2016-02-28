@@ -1,11 +1,18 @@
 use crypto::bcrypt::bcrypt;
 use rand::{thread_rng, Rng};
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, Eq, PartialEq, RustcDecodable, RustcEncodable)]
 pub struct User {
-    username: String,
+    pub username: String,
     salt: [u8; 16],
     hash: [u8; 24]
+}
+
+impl Hash for User {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.username.hash(state);
+    }
 }
 
 impl User {
