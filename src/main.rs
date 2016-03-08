@@ -8,7 +8,7 @@ mod user;
 mod connection;
 
 use std::sync::{Arc, Mutex};
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::thread;
 use std::path::Path;
@@ -50,11 +50,11 @@ fn main() {
 
         thread::spawn(move || {
             let mut stream = stream.unwrap();
+            let mut reader = BufReader::new(&stream);
 
             loop {
-                let mut buf = [0u8; 4096];
-                let size = stream.read(&mut buf).unwrap();
-                let string = from_utf8(&buf[..size]).unwrap();
+                let mut string = String::new();
+                reader.read_line(&mut string).unwrap();
 
                 let response = match json::decode(&string) {
                     Ok(request) => {
@@ -87,7 +87,9 @@ fn main() {
                     }
                 };
 
-                stream.write(json::encode(&response).unwrap().as_bytes());
+                let line = format!("{}\n", json::encode(&response).unwrap());
+
+                reader.get_mut().write(line.as_bytes()).unwrap();
             }
         });
     }
