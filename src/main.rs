@@ -23,6 +23,8 @@ use user::User;
 use data_base::DataBase;
 
 fn main() {
+    let mut room = Arc::new(Mutex::new(Vec::new()));
+
     let path = Path::new("users.json");
     let mut data_base = if path.is_file() {
         DataBase::new(path).unwrap()
@@ -46,9 +48,11 @@ fn main() {
     println!("listening");
 
     for stream in listener.incoming() {
+        let mut room = room.clone();
         let mut data_base = data_base.clone();
 
         thread::spawn(move || {
+            let mut current_user = None;
             let mut stream = stream.unwrap();
             let mut reader = BufReader::new(&stream);
 
@@ -66,6 +70,8 @@ fn main() {
                                     Some(user) => {
                                         if user.auth(&password) {
                                             //TODO port + store
+                                            current_user = Some(username);
+
                                             Response::Ok
                                         } else {
                                             Response::Err(2, "Incorrect username or password.".to_string())
@@ -75,10 +81,26 @@ fn main() {
                                 }
                             }
                             ClientRequest::Reg(username, password) => {
+                                let mut data_base = data_base.lock().unwrap();
+
+                                data_base.add(User::new(&username, &password));
+                                data_base.write().unwrap();
+
                                 Response::Ok
                             }
                             ClientRequest::Send(message) => {
-                                Response::Ok
+                                match current_user {
+                                    Some(ref user) => {
+                                        let mut room = room.lock().unwrap();
+
+                                        room.push((user.clone(), message));
+
+                                        Response::Ok
+                                    }
+                                    None => {
+                                        Response::Err(3, "Authenticate first.".to_string())
+                                    }
+                                }
                             }
                         }
                     }
