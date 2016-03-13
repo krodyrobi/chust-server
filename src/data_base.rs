@@ -5,7 +5,7 @@ use std::io::Read;
 use std::io::Write;
 use std::collections::HashMap;
 
-use rustc_serialize::json::{self, Json};
+use rustc_serialize::json::{self};
 
 use super::user::User;
 
