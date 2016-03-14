@@ -1,12 +1,8 @@
 
 #[derive(Clone, Debug, Eq, PartialEq, RustcDecodable, RustcEncodable)]
 pub enum ClientRequest {
-    Auth(String, String, String),
+    Auth(String, String),
     Reg(String, String),
-    Send(String)
-}
-
-pub enum ServerRequest {
     Send(String)
 }
 
